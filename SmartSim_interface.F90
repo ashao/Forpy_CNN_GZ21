@@ -35,7 +35,7 @@ type, public :: smartsim_python_interface ; private
 
 end type
 
-character(len=255) :: ML_PATH='/scratch/gpfs/aeshao/dev/Forpy_CNN_GZ21/'
+character(len=255) :: ML_PATH='INPUT/'
 
 contains
 
@@ -45,6 +45,7 @@ subroutine smartsim_run_python_init(CS,python_dir,python_file)
     character(len=*),         intent(in)  :: python_file   !< The name of the Python script to read
     type(smartsim_python_interface),   intent(inout) :: CS !< Python interface object
     integer :: db_return_code
+    logical :: exists
 
     ! Set various clock ids
     CS%id_client_init   = cpu_clock_id('(CNN_SS client init)', grain=CLOCK_ROUTINE)
@@ -66,20 +67,26 @@ subroutine smartsim_run_python_init(CS,python_dir,python_file)
       call cpu_clock_end(CS%id_client_init)
 
   ! Set the machine learning model
-      if (is_root_pe()) then
+      !if (is_root_pe()) then
        call cpu_clock_begin(CS%id_set_model)
-       db_return_code = CS%client%set_model_from_file(CS%model_key, TRIM(ML_PATH) // "CNN_GPU_2X21X21X2.pt", "TORCH", device="GPU")
+       exists = .false.
+       db_return_code =CS%client%poll_key(CS%script_key,500,100, exists)
+       if (.not. exists) call MOM_error(FATAL,"Script does not exist")
+       exists = .false.
+       db_return_code =CS%client%poll_key(TRIM(CS%model_key)//"_0",500,100, exists)
+       if (.not. exists) call MOM_error(FATAL,"Script does not exist")
+!       db_return_code = CS%client%set_model_from_file(CS%model_key, TRIM(ML_PATH) // "CNN_GPU_2X21X21X2.pt", "TORCH", device="GPU")
         ! db_return_code = CS%client%set_model_from_file_multigpu(CS%model_key, &
         ! "/scratch/cimes/cz3321/MOM6/MOM6-examples/src/MOM6/config_src/external/ML_Forpy/Forpy_CNN_GZ21/CNN_GPU.pt", &
         !                                             "TORCH",first_gpu=0,num_gpus=2)
         if (CS%client%SR_error_parser(db_return_code)) call MOM_error(FATAL, "SmartSim: set_model failed")
         call cpu_clock_end(CS%id_set_model)
         call cpu_clock_begin(CS%id_set_script)
-        db_return_code = CS%client%set_script_from_file(CS%script_key, "CPU", TRIM(ML_PATH) // "testNN_trace.txt")
+!        db_return_code = CS%client%set_script_from_file(CS%script_key, "CPU", TRIM(ML_PATH) // "testNN_trace.txt")
         if (CS%client%SR_error_parser(db_return_code)) call MOM_error(FATAL, "SmartSim: set_script failed")
         call cpu_clock_end(CS%id_set_script)
       endif
-    endif
+    !endif
   
 end subroutine smartsim_run_python_init
 
@@ -105,21 +112,26 @@ subroutine smartsim_run_python(in1, out1, CS, TopLayer, CNN_HALO_SIZE)
     integer :: i, j, k, l
     integer :: nztemp, out_num
     integer :: index_global(4) ! absolute begin and end index in the subdomain
+    integer :: device_number
 
     character(len=255), dimension(1) :: input
     character(len=255), dimension(1) :: model_input
     character(len=255), dimension(1) :: model_output
     character(len=255), dimension(1) :: output
+    character(len=12) :: model_key_device
 
     CHARACTER(LEN=80)::FILE_NAME='SS'
     CHARACTER(LEN=80)::TMP_NAME=' '
 
     current_pe = PE_here()
+!    device_number = mod(current_pe,8)
+    device_number = 0
+    write(model_key_device,'(A,A,I1)') TRIM(CS%model_key),"_",device_number
 
     if (TopLayer) then
       nztemp = 1
     else
-      nztemp = size(in1,4)
+      nztemp = 2
     endif
 
   ! Put arrays into the database  
