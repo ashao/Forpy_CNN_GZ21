@@ -87,7 +87,7 @@ subroutine smartsim_run_python_init(CS,python_dir,python_file)
         call cpu_clock_end(CS%id_set_script)
       endif
     !endif
-  
+
 end subroutine smartsim_run_python_init
 
 !> !> Send variables to a python script and output the results
@@ -104,8 +104,9 @@ subroutine smartsim_run_python(in1, out1, CS, TopLayer, CNN_HALO_SIZE)
     integer :: ierror ! return code from python interfaces
     real(kind=real32), dimension(6,size(in1,2)-CNN_HALO_SIZE*2, &
                                    size(in1,3)-CNN_HALO_SIZE*2, &
-                                   size(in1,4)) :: out_for  !< outputs from Python module
-    
+                                   2) :: out_for  !< outputs from Python module
+    real(kind=real32), dimension(2,2,size(in1,2),size(in1,3)) :: in1_reshape
+
     integer :: db_return_code = 0
     integer :: current_pe
     integer :: hi, hj ! temporary
@@ -134,33 +135,35 @@ subroutine smartsim_run_python(in1, out1, CS, TopLayer, CNN_HALO_SIZE)
       nztemp = 2
     endif
 
-  ! Put arrays into the database  
+  ! Put arrays into the database
     call cpu_clock_begin(CS%id_put_tensor)
     if (TopLayer) then
       db_return_code = CS%client%put_tensor("input"//CS%key_suffix, &
       in1(:,:,:,1), shape(in1(:,:,:,1))) + db_return_code
     else
-      db_return_code = CS%client%put_tensor("input"//CS%key_suffix, in1, shape(in1)) + db_return_code
+      in1_reshape = reshape(in1(:,:,:,1:2), shape(in1_reshape), order = [4,1,2,3])
+      db_return_code = CS%client%put_tensor("input"//CS%key_suffix, in1_reshape, shape(in1_reshape)) + db_return_code
     endif
     ! db_return_code = CS%client%put_tensor("PE"//CS%key_suffix, current_pe, [1]) + db_return_code
     ! db_return_code = CS%client%put_tensor("PEs"//CS%key_suffix, num_PEs, [1]) + db_return_code
     ! db_return_code = CS%client%put_tensor("domain_id"//CS%key_suffix, index_global, shape(index_global)) + db_return_code
     if (CS%client%SR_error_parser(db_return_code)) call MOM_error(FATAL, "Putting metadata into the database failed")
     call cpu_clock_end(CS%id_put_tensor)
-    
+
   ! Run torchscript
     input(1) = "input"//CS%key_suffix
     model_input(1) = "model_input"//CS%key_suffix
     model_output(1) = "model_output"//CS%key_suffix
     output(1) = "output"//CS%key_suffix
     ! script 1
-    call cpu_clock_begin(CS%id_run_script1)
-    db_return_code = CS%client%run_script(CS%script_key, "pre_process", input, model_input)
-    if (CS%client%SR_error_parser(db_return_code)) call MOM_error(FATAL, "Run script1 in the database failed")
-    call cpu_clock_end(CS%id_run_script1)
+!    call cpu_clock_begin(CS%id_run_script1)
+!    db_return_code = CS%client%run_script(CS%script_key, "pre_process", input, model_input)
+!    if (CS%client%SR_error_parser(db_return_code)) call MOM_error(FATAL, "Run script1 in the database failed")
+!    call cpu_clock_end(CS%id_run_script1)
     ! ML model
     call cpu_clock_begin(CS%id_run_model)
-    db_return_code = CS%client%run_model(CS%model_key, model_input, model_output)
+    db_return_code = CS%client%run_model(model_key_device, input, model_output)
+!    db_return_code = CS%client%run_model(model_key_device, model_input, model_output)
     ! db_return_code = CS%client%run_model_multigpu(CS%model_key, model_input, model_output,offset=PE_here(),first_gpu=0,num_gpus=2)
     if (CS%client%SR_error_parser(db_return_code)) call MOM_error(FATAL, "Run model in the database failed")
     call cpu_clock_end(CS%id_run_model)
@@ -180,7 +183,7 @@ subroutine smartsim_run_python(in1, out1, CS, TopLayer, CNN_HALO_SIZE)
   ! find the margin size (if order='F')
     hi = (size(out1,2) - size(out_for,2))/2
     hj = (size(out1,3) - size(out_for,3))/2
-    
+
   ! Output (out_for in C order has index (nk,nj,ni))
               ! in F order has index (ni,nj,nk)
     out1 = 0.0
@@ -194,41 +197,41 @@ subroutine smartsim_run_python(in1, out1, CS, TopLayer, CNN_HALO_SIZE)
     ! if (is_root_pe()) then
     !   TMP_NAME = 'out_for_Sxm_'//TRIM(FILE_NAME)
     !   open(10,file=TMP_NAME)
-    !   do j=1,size(out_for,3) 
+    !   do j=1,size(out_for,3)
     !     write(10,100) (out_for(3,i,j,1),i=1,size(out_for,2))
-    !   enddo 
+    !   enddo
     !   close(10)
 
     !   TMP_NAME = 'out_for_Sym_'//TRIM(FILE_NAME)
     !   open(10,file=TMP_NAME)
-    !   do j=1,size(out_for,3) 
+    !   do j=1,size(out_for,3)
     !     write(10,100) (out_for(4,i,j,1),i=1,size(out_for,2))
-    !   enddo 
+    !   enddo
     !   close(10)
 
     !   TMP_NAME = 'out_for_Sxd_'//TRIM(FILE_NAME)
     !   open(10,file=TMP_NAME)
-    !   do j=1,size(out_for,3) 
+    !   do j=1,size(out_for,3)
     !     write(10,100) (out_for(5,i,j,1),i=1,size(out_for,2))
-    !   enddo 
+    !   enddo
     !   close(10)
 
     !   TMP_NAME = 'out_for_Syd_'//TRIM(FILE_NAME)
     !   open(10,file=TMP_NAME)
-    !   do j=1,size(out_for,3) 
+    !   do j=1,size(out_for,3)
     !     write(10,100) (out_for(6,i,j,1),i=1,size(out_for,2))
-    !   enddo 
+    !   enddo
     !   close(10)
     !   100 FORMAT(5000es15.4)
     ! endif
     ! stop'debugging!'
-  
-end subroutine smartsim_run_python 
+
+end subroutine smartsim_run_python
 
 !> Finalize smartsim
 subroutine smartsim_run_python_finalize(CS)
     type(smartsim_python_interface), intent(inout) :: CS !< Python interface object
-  
+
 end subroutine smartsim_run_python_finalize
 
 end module smartsim_interface
