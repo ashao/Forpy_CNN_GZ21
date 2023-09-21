@@ -5,8 +5,10 @@ use iso_fortran_env,       only : real32, real64
 use MOM_coms,                  only : PE_here,num_PEs
 use MOM_grid,                  only : ocean_grid_type
 use MOM_error_handler,         only : MOM_error, FATAL,NOTE, is_root_pe
+use MOM_file_parser,           only : get_param, param_file_type
 use MOM_cpu_clock,             only : cpu_clock_id, cpu_clock_begin, cpu_clock_end, CLOCK_ROUTINE
 use MOM_database_comms,        only : dbclient_type, dbcomms_CS_type
+
 
 
 implicit none; private
@@ -40,12 +42,13 @@ character(len=255) :: ML_PATH='INPUT/'
 contains
 
 !> Initialize SmartSim with specify Python script and directory
-subroutine smartsim_run_python_init(CS,python_dir,python_file)
+subroutine smartsim_run_python_init(CS,python_dir,python_file,param_file)
+    type(smartsim_python_interface),   intent(inout) :: CS !< Python interface object
     character(len=*),         intent(in)  :: python_dir    !< The directory in which python scripts are found
     character(len=*),         intent(in)  :: python_file   !< The name of the Python script to read
-    type(smartsim_python_interface),   intent(inout) :: CS !< Python interface object
+    type(param_file_type),    intent(in)  :: param_file    !< structure to parse for runtime parameters 
     integer :: db_return_code
-    logical :: exists
+    logical :: exists, clustered
 
     ! Set various clock ids
     CS%id_client_init   = cpu_clock_id('(CNN_SS client init)', grain=CLOCK_ROUTINE)
@@ -57,11 +60,15 @@ subroutine smartsim_run_python_init(CS,python_dir,python_file)
     CS%id_run_script2   = cpu_clock_id('(CNN_SS run script 2)', grain=CLOCK_ROUTINE)
     CS%id_unpack_tensor = cpu_clock_id('(CNN_SS unpack tensor )', grain=CLOCK_ROUTINE)
 
+    call get_param(param_file, 'smartsim_gz21', "GZ21_CLUSTERED", clustered, &
+            "True if the SmartRedis client in GZ21 should be clustered", &
+                 default=.true.)
+
     ! Store pointers in control structure
     write(CS%key_suffix, '(A,I6.6)') '_', PE_here()
     if (.not. CS%client%isinitialized()) then
       call cpu_clock_begin(CS%id_client_init)
-      db_return_code = CS%client%initialize(.false.)
+      db_return_code = CS%client%initialize(clustered)
       if (CS%client%SR_error_parser(db_return_code)) call MOM_error(FATAL, "Database client failed to initialize")
       call MOM_error(NOTE,"Database Client Initialized")
       call cpu_clock_end(CS%id_client_init)
@@ -169,7 +176,7 @@ subroutine smartsim_run_python(in1, out1, CS, TopLayer, CNN_HALO_SIZE)
 
   ! extract the output from Python
     call cpu_clock_begin(CS%id_unpack_tensor)
-    db_return_code = CS%client%unpack_tensor(output(1), out_for, shape(out_for))
+    db_return_code = CS%client%unpack_tensor(output(1), out_for(:,:,:,1:nztemp), shape(out_for(:,:,:,1:nztemp)))
     if (CS%client%SR_error_parser(db_return_code)) call MOM_error(FATAL, "unpack tensor from the database failed")
     call cpu_clock_end(CS%id_unpack_tensor)
     ! write(*,*) "output shape:", size(out_for)
