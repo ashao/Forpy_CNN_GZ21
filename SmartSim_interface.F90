@@ -4,7 +4,7 @@ use iso_fortran_env,       only : real32, real64
 
 use MOM_coms,                  only : PE_here,num_PEs
 use MOM_grid,                  only : ocean_grid_type
-use MOM_error_handler,         only : MOM_error, FATAL,NOTE, is_root_pe
+use MOM_error_handler,         only : MOM_error, FATAL, WARNING, NOTE, is_root_pe
 use MOM_file_parser,           only : get_param, param_file_type
 use MOM_cpu_clock,             only : cpu_clock_id, cpu_clock_begin, cpu_clock_end, CLOCK_ROUTINE
 use MOM_database_comms,        only : dbclient_type, dbcomms_CS_type
@@ -42,11 +42,12 @@ character(len=255) :: ML_PATH='INPUT/'
 contains
 
 !> Initialize SmartSim with specify Python script and directory
-subroutine smartsim_run_python_init(CS,python_dir,python_file,param_file)
+subroutine smartsim_run_python_init(CS,python_dir,python_file,param_file, dbcomms_CS)
     type(smartsim_python_interface),   intent(inout) :: CS !< Python interface object
     character(len=*),         intent(in)  :: python_dir    !< The directory in which python scripts are found
     character(len=*),         intent(in)  :: python_file   !< The name of the Python script to read
-    type(param_file_type),    intent(in)  :: param_file    !< structure to parse for runtime parameters 
+    type(param_file_type),    intent(in)  :: param_file    !< structure to parse for runtime parameters
+    type(dbcomms_CS_type), target, intent(in)  :: dbcomms_CS    !< structure to parse for runtime parameters
     integer :: db_return_code
     logical :: exists, clustered
 
@@ -60,40 +61,36 @@ subroutine smartsim_run_python_init(CS,python_dir,python_file,param_file)
     CS%id_run_script2   = cpu_clock_id('(CNN_SS run script 2)', grain=CLOCK_ROUTINE)
     CS%id_unpack_tensor = cpu_clock_id('(CNN_SS unpack tensor )', grain=CLOCK_ROUTINE)
 
-    call get_param(param_file, 'smartsim_gz21', "GZ21_CLUSTERED", clustered, &
-            "True if the SmartRedis client in GZ21 should be clustered", &
-                 default=.true.)
-
     ! Store pointers in control structure
     write(CS%key_suffix, '(A,I6.6)') '_', PE_here()
+    CS%client = dbcomms_CS%client
     if (.not. CS%client%isinitialized()) then
-      call cpu_clock_begin(CS%id_client_init)
-      db_return_code = CS%client%initialize(clustered)
-      if (CS%client%SR_error_parser(db_return_code)) call MOM_error(FATAL, "Database client failed to initialize")
-      call MOM_error(NOTE,"Database Client Initialized")
-      call cpu_clock_end(CS%id_client_init)
+      call MOM_error(FATAL, "Database client was not initialized. Ensure USE_DBCLIENT=True")
+    endif
 
-  ! Set the machine learning model
-      !if (is_root_pe()) then
-       call cpu_clock_begin(CS%id_set_model)
-       exists = .false.
-       db_return_code =CS%client%poll_key(CS%script_key,500,100, exists)
-       if (.not. exists) call MOM_error(FATAL,"Script does not exist")
-       exists = .false.
-       db_return_code =CS%client%poll_key(TRIM(CS%model_key)//"_0",500,100, exists)
-       if (.not. exists) call MOM_error(FATAL,"Script does not exist")
-!       db_return_code = CS%client%set_model_from_file(CS%model_key, TRIM(ML_PATH) // "CNN_GPU_2X21X21X2.pt", "TORCH", device="GPU")
-        ! db_return_code = CS%client%set_model_from_file_multigpu(CS%model_key, &
-        ! "/scratch/cimes/cz3321/MOM6/MOM6-examples/src/MOM6/config_src/external/ML_Forpy/Forpy_CNN_GZ21/CNN_GPU.pt", &
-        !                                             "TORCH",first_gpu=0,num_gpus=2)
-        if (CS%client%SR_error_parser(db_return_code)) call MOM_error(FATAL, "SmartSim: set_model failed")
-        call cpu_clock_end(CS%id_set_model)
+  ! Check to see that the ML model and script were set. Otherwise attempt to load
+    if (is_root_pe()) then
+      exists = .false.
+      db_return_code =CS%client%poll_key(CS%script_key,500,100, exists)
+      if (.not. exists) then
+        call MOM_error(WARNING, "Script does not exist")
         call cpu_clock_begin(CS%id_set_script)
-!        db_return_code = CS%client%set_script_from_file(CS%script_key, "CPU", TRIM(ML_PATH) // "testNN_trace.txt")
+        db_return_code = CS%client%set_script_from_file(CS%script_key, "CPU", TRIM(ML_PATH) // "testNN_trace.txt")
         if (CS%client%SR_error_parser(db_return_code)) call MOM_error(FATAL, "SmartSim: set_script failed")
         call cpu_clock_end(CS%id_set_script)
       endif
-    !endif
+      exists = .false.
+      db_return_code =CS%client%poll_key(TRIM(CS%model_key)//"_0",500,100, exists)
+      if (.not. exists) then
+        call MOM_error(WARNING, "Model does not exist")
+        call cpu_clock_begin(CS%id_set_model)
+        db_return_code = CS%client%set_model_from_file( &
+          CS%model_key, TRIM(ML_PATH) // "CNN_GPU_2X21X21X2.pt", "TORCH", device="GPU" &
+        )
+        if (CS%client%SR_error_parser(db_return_code)) call MOM_error(FATAL, "SmartSim: set_model failed")
+        call cpu_clock_end(CS%id_set_model)
+      endif
+    endif
 
 end subroutine smartsim_run_python_init
 
@@ -131,7 +128,7 @@ subroutine smartsim_run_python(in1, out1, CS, TopLayer, CNN_HALO_SIZE)
     CHARACTER(LEN=80)::TMP_NAME=' '
 
     current_pe = PE_here()
-!    device_number = mod(current_pe,8)
+    ! Note the following should be set to a runtime variable if more than one GPU might be present
     device_number = 0
     write(model_key_device,'(A,A,I1)') TRIM(CS%model_key),"_",device_number
 

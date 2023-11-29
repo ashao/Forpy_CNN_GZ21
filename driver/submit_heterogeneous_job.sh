@@ -8,7 +8,7 @@
 #SBATCH --gres=gpu:1             # use GPU
 #SBATCH hetjob
 #SBATCH --partition=cimes
-#SBATCH --nodes=5               # node count
+#SBATCH --nodes=1               # node count
 #SBATCH --ntasks-per-node=128    # number of tasks per node
 #SBATCH --cpus-per-task=1        # cpu-cores per task (>1 if multi-threaded tasks)
 #SBATCH --mem-per-cpu=2G         # memory per cpu-core (4G is default)
@@ -22,5 +22,5 @@ conda activate smartsim-dev
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/aeshao/dev/SmartRedis/install/lib
 ulimit -s unlimited
 
-#python call_MOM6_clustered.py
-python call_OM4_025_clustered.py
+python call_MOM6_clustered.py
+#python call_OM4_025_clustered.py

@@ -1,0 +1,9 @@
+#override NIGLOBAL=;nx;
+#override NJGLOBAL=;ny;
+USE_DBCLIENT = True
+DBCLIENT_COLOCATED = ;colocated;
+DBCLIENT_CLUSTER = ;clustered;
+
+! Note if the resolution gets too high, these might need to be adjusted
+#override DT=900.
+#override DT_THERM=1200.

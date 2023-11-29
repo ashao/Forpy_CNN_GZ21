@@ -1,0 +1,3 @@
+USE_DBCLIENT = True
+DBCLIENT_COLOCATED = ;colocated;
+DBCLIENT_CLUSTER = ;clustered;

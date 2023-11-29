@@ -52,6 +52,7 @@ def main():
         files = glob.glob(f'{case_root}/base/')
         files.append(f'{case_root}/base/RESTART')
         sym_files = [f'{case_root}/input/INPUT']
+        shutil.copy("MOM_override.OM4_025", "MOM_override")
         model.attach_generator_files(to_copy=files, to_configure='./MOM_override', to_symlink=sym_files)
         model.add_script('pys', script_path='/scratch/gpfs/aeshao/dev/Forpy_CNN_GZ21/testNN_trace.txt')
         model.add_ml_model(
