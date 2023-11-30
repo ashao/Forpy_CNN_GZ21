@@ -46,7 +46,8 @@ def main():
         if db_nodes > 1:
             clustered_value = 'True'
         model.params = {
-                'clustered':clustered_value
+                'clustered':clustered_value,
+                "colocated":"False"
             }
 
         files = glob.glob(f'{case_root}/base/')
