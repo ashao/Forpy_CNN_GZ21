@@ -80,7 +80,7 @@ def main():
         logging.info(f"Finished: \tmom6_cpu={mom6_cpu}\t{end_time-start_time}")
 
         exp.stop(db)
-        tmp_df = parse_mom6_out()
+        tmp_df = parse_mom6_out(f"{model.path}/MOM6_run.out")
         tmp_df["mom6_cpu"] = mom6_cpu
         tmp_df["refine"] = refine
 

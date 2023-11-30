@@ -79,11 +79,11 @@ def main():
         logging.info(f'Finished: \tdb_nodes={db_nodes}\t{end_time-start_time}')
 
         exp.stop(db)
-#        tmp_df = parse_mom6_out()
-#        tmp_df['db_nodes'] = db_nodes
-#        tmp_df['ncpus'] = ncpus
-#
-#        timing_dfs.append(tmp_df)
+        tmp_df = parse_mom6_out(f"{model.path}/MOM6_run.out")
+        tmp_df['db_nodes'] = db_nodes
+        tmp_df['ncpus'] = ncpus
+
+        timing_dfs.append(tmp_df)
 
         time.sleep(2)
 
