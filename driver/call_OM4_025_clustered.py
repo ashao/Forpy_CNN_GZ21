@@ -18,7 +18,7 @@ def main():
     case_root = '/scratch/gpfs/aeshao/dev/Forpy_CNN_GZ21/driver/cases/OM4_025'
 
     db_nodes_list = [1]
-    mom6_nodes_list = [1,3,5]
+    mom6_nodes_list = [5]
 
     combinations = itertools.product(mom6_nodes_list, db_nodes_list)
 
@@ -30,7 +30,7 @@ def main():
         # create and start an instance of the Orchestrator database
         # create and start an MOM6 experiment
         srun = exp.create_run_settings(
-                exe="/scratch/gpfs/aeshao/dev/MOM6-examples/build/ice_ocean_SIS2/MOM6",
+                exe="/scratch/gpfs/aeshao/dev/MOM6-examples/build/intel/ice_ocean_SIS2/MOM6",
                 run_command='srun'
                 )
 
@@ -62,14 +62,15 @@ def main():
                 model_path='/scratch/gpfs/aeshao/dev/Forpy_CNN_GZ21/CNN_GPU_2X21X21X2.pt',
                 device=f'GPU',
                 batch_size=ncpus,
-                min_batch_size=ncpus
+                min_batch_size=ncpus,
+                min_batch_timeout=10
         )
         db = exp.create_database(
             db_nodes = db_nodes,
             interface = ['ib0'],
         )
 
-        db.set_cpus(48)
+        db.set_cpus(64)
         db.set_run_arg('C', 'gpu')
         exp.generate(db, overwrite=True)
 
