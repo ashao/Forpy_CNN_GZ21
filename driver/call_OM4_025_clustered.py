@@ -18,7 +18,7 @@ def main():
     case_root = '/scratch/gpfs/aeshao/dev/Forpy_CNN_GZ21/driver/cases/OM4_025'
 
     db_nodes_list = [1]
-    mom6_nodes_list = [5]
+    mom6_nodes_list = [4]
 
     combinations = itertools.product(mom6_nodes_list, db_nodes_list)
 
@@ -86,8 +86,6 @@ def main():
         tmp_df['ncpus'] = ncpus
 
         timing_dfs.append(tmp_df)
-
-        time.sleep(2)
 
     full_df = pd.concat(timing_dfs, ignore_index=True)
     full_df.to_csv('timings.csv')

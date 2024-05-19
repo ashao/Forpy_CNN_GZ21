@@ -16,8 +16,10 @@ def parse_mom6_out(fname='MOM6_run_exp/MOM6_run/MOM6_run.out'):
         if 'MPP_STACK' in line:
             read = False
         if read:
-            parsed_string = line.replace('\n','')
+            parsed_string = line.replace('\n','').lstrip()
             parsed_string = re.split('  +', parsed_string)
+            len(parsed_string)
+            print(parsed_string)
             timings.append(parsed_string)
 
     df = pd.DataFrame(timings,columns=fields)

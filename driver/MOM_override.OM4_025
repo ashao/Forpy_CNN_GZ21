@@ -1,3 +1,5 @@
 USE_DBCLIENT = True
 DBCLIENT_COLOCATED = ;colocated;
 DBCLIENT_CLUSTER = ;clustered;
+CNN_VS = "barotropic"
+PYTHON_DATA_COLLECT = True
